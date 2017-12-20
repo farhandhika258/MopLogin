@@ -4,13 +4,21 @@ package com.test.farhandhika.moplogin;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.sqlite.SQLiteDatabase;
+import android.net.ParseException;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -21,8 +29,16 @@ import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.net.ssl.HttpsURLConnection;
 
 public class MainActivity extends AppCompatActivity {
+
+    MySQLiteHelper db = new MySQLiteHelper(this);
+
 
 
     public static final int CONNECTION_TIMEOUT=10000;
@@ -38,6 +54,9 @@ public class MainActivity extends AppCompatActivity {
         // Get Reference to variables
         etUsername = (EditText) findViewById(R.id.username);
         etPassword = (EditText) findViewById(R.id.password);
+
+
+
 
     }
 
@@ -55,6 +74,8 @@ public class MainActivity extends AppCompatActivity {
 
     private class AsyncLogin extends AsyncTask<String, String, String>
     {
+
+
         ProgressDialog pdLoading = new ProgressDialog(MainActivity.this);
         HttpURLConnection conn;
         URL url = null;
@@ -71,84 +92,87 @@ public class MainActivity extends AppCompatActivity {
         }
         @Override
         protected String doInBackground(String... params) {
+
+            final String username = etUsername.getText().toString();
+            final String password = etPassword.getText().toString();
+
+
             try {
 
-                // Enter URL address where your php file resides
-                url = new URL("https://dev.mopaps.xtend.net.my/oauth");
+                URL url = new URL("https://dev.mopaps.xtend.net.my/oauth"); // here is your URL path
 
-            } catch (MalformedURLException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-                return "exception";
-            }
-            try {
-                // Setup HttpURLConnection class to send and receive data from php and mysql
-                conn = (HttpURLConnection)url.openConnection();
-                conn.setReadTimeout(15000);
-                conn.setConnectTimeout(15000);
+                JSONObject postDataParams = new JSONObject();
+                postDataParams.put("username", username);
+                postDataParams.put("password", password);
+                postDataParams.put("grant_type", "password");
+                postDataParams.put("client_secret", "client1234");
+                postDataParams.put("client_id", "mopaps-android");
+                Log.e("params",postDataParams.toString());
+
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setReadTimeout(15000 /* milliseconds */);
+                conn.setConnectTimeout(15000 /* milliseconds */);
                 conn.setRequestMethod("POST");
-
-                // setDoInput and setDoOutput method depict handling of both send and receive
                 conn.setDoInput(true);
                 conn.setDoOutput(true);
 
-                // Append parameters to URL
-                Uri.Builder builder = new Uri.Builder()
-                        .appendQueryParameter("username", params[0])
-                        .appendQueryParameter("password", params[1])
-                        .appendQueryParameter("grant_type", "password")
-                        .appendQueryParameter("client_secret", "client1234")
-                        .appendQueryParameter("client_id", "mopaps-android");
-                String query = builder.build().getEncodedQuery();
-
-                // Open connection for sending data
                 OutputStream os = conn.getOutputStream();
                 BufferedWriter writer = new BufferedWriter(
                         new OutputStreamWriter(os, "UTF-8"));
-                writer.write(query);
+                writer.write(getPostDataString(postDataParams));
+
                 writer.flush();
                 writer.close();
                 os.close();
-                conn.connect();
 
-            } catch (IOException e1) {
-                // TODO Auto-generated catch block
-                e1.printStackTrace();
-                return "exception";
-            }
+                int responseCode=conn.getResponseCode();
 
-            try {
+                if (responseCode == HttpsURLConnection.HTTP_OK) {
 
-                int response_code = conn.getResponseCode();
 
-                // Check if successful connection made
-                if (response_code == HttpURLConnection.HTTP_OK) {
+                    BufferedReader in =new BufferedReader(new
+                            InputStreamReader(
+                            conn.getInputStream()));
 
-                    // Read data sent from server
-                    InputStream input = conn.getInputStream();
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(input));
-                    StringBuilder result = new StringBuilder();
-                    String line;
+                    StringBuffer sb = new StringBuffer("");
+                    String line="";
 
-                    while ((line = reader.readLine()) != null) {
-                        result.append(line);
+                    while((line = in.readLine()) != null) {
+                        sb.append(line);
+                        break;
                     }
 
-                    // Pass data to onPostExecute method
-                    return(result.toString());
 
-                }else{
 
-                    return("unsuccessful");
+                    /**
+                     * CRUD Operations
+                     * */
+                    // add Books
+                    db.addBook(new Book(line));
+
+
+                    // get all books
+                    List<Book> list = db.getAllBooks();
+
+                    // delete one book
+                    db.deleteBook(list.get(0));
+
+                    // get all books
+                    db.getAllBooks();
+
+
+
+                    in.close();
+                    return sb.toString();
+
                 }
-
-            } catch (IOException e) {
-                e.printStackTrace();
-                return "exception";
-            } finally {
-                conn.disconnect();
+                else {
+                    return new String("false : "+responseCode);
+                }
             }
-
+            catch(Exception e){
+                return new String("Exception: " + e.getMessage());
+            }
 
         }
 
@@ -159,23 +183,35 @@ public class MainActivity extends AppCompatActivity {
 
             pdLoading.dismiss();
 
-            if(result.equalsIgnoreCase("true"))
-            {
 
-                //Intent intent = new Intent(MainActivity.this,SuccessActivity.class);
-                //startActivity(intent);
-                //MainActivity.this.finish();
-
-                Toast.makeText(getApplicationContext(), result,
-                        Toast.LENGTH_LONG).show();
-
-
-            } else if (result.equalsIgnoreCase("exception") || result.equalsIgnoreCase("unsuccessful")) {
-
-                Toast.makeText(MainActivity.this, "Invalid username or password", Toast.LENGTH_LONG).show();
-
-            }
+            Toast.makeText(getApplicationContext(), "Success Adding data to SQLite!",
+                    Toast.LENGTH_LONG).show();
         }
 
     }
+
+    public String getPostDataString(JSONObject params) throws Exception {
+
+        StringBuilder result = new StringBuilder();
+        boolean first = true;
+
+        Iterator<String> itr = params.keys();
+
+        while(itr.hasNext()){
+
+            String key= itr.next();
+            Object value = params.get(key);
+
+            if (first)
+                first = false;
+            else
+                result.append("&");
+
+            result.append(URLEncoder.encode(key, "UTF-8"));
+            result.append("=");
+            result.append(URLEncoder.encode(value.toString(), "UTF-8"));
+
+        }
+        return result.toString();
+}
 }
