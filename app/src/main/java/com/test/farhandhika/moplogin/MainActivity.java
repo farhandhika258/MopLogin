@@ -2,6 +2,7 @@ package com.test.farhandhika.moplogin;
 
 
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.sqlite.SQLiteDatabase;
@@ -13,6 +14,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.json.JSONArray;
@@ -37,9 +39,7 @@ import javax.net.ssl.HttpsURLConnection;
 
 public class MainActivity extends AppCompatActivity {
 
-    MySQLiteHelper db = new MySQLiteHelper(this);
-
-
+    private DaoSession mDaoSession;
 
     public static final int CONNECTION_TIMEOUT=10000;
     public static final int READ_TIMEOUT=15000;
@@ -54,7 +54,24 @@ public class MainActivity extends AppCompatActivity {
         // Get Reference to variables
         etUsername = (EditText) findViewById(R.id.username);
         etPassword = (EditText) findViewById(R.id.password);
+        TextView textView = (TextView) findViewById(R.id.text);
+        TextView textView2 = (TextView) findViewById(R.id.text2);
+        TextView textView3 = (TextView) findViewById(R.id.text3);
+        TextView textView4 = (TextView) findViewById(R.id.text4);
+        TextView textView5 = (TextView) findViewById(R.id.text5);
 
+
+        Token token = ((App)getApplication()).getDaoSession().getTokenDao().load(2L);
+
+
+        if(token!= null) {
+
+            textView.setText(token.getAccesstoken());
+            textView2.setText(token.getExpiresin());
+            textView3.setText(token.getTokentype());
+            textView4.setText(token.getScope());
+            textView5.setText(token.getRefreshtoken());
+        }
 
 
 
@@ -96,7 +113,6 @@ public class MainActivity extends AppCompatActivity {
             final String username = etUsername.getText().toString();
             final String password = etPassword.getText().toString();
 
-
             try {
 
                 URL url = new URL("https://dev.mopaps.xtend.net.my/oauth"); // here is your URL path
@@ -129,50 +145,31 @@ public class MainActivity extends AppCompatActivity {
 
                 if (responseCode == HttpsURLConnection.HTTP_OK) {
 
-
                     BufferedReader in =new BufferedReader(new
                             InputStreamReader(
                             conn.getInputStream()));
-
+                    StringBuilder result = new StringBuilder();
                     StringBuffer sb = new StringBuffer("");
                     String line="";
 
                     while((line = in.readLine()) != null) {
-                        sb.append(line);
-                        break;
+                        result.append(line);
+                       break;
+
                     }
 
-
-
-                    /**
-                     * CRUD Operations
-                     * */
-                    // add Books
-                    db.addBook(new Book(line));
-
-
-                    // get all books
-                    List<Book> list = db.getAllBooks();
-
-                    // delete one book
-                    db.deleteBook(list.get(0));
-
-                    // get all books
-                    db.getAllBooks();
-
-
-
                     in.close();
-                    return sb.toString();
+                    return result.toString();
 
                 }
                 else {
-                    return new String("false : "+responseCode);
+                    return("unsuccessful");
                 }
             }
             catch(Exception e){
-                return new String("Exception: " + e.getMessage());
-            }
+                e.printStackTrace();
+                return"exception";
+                }
 
         }
 
@@ -181,12 +178,25 @@ public class MainActivity extends AppCompatActivity {
 
             //this method will be running on UI thread
 
+
+
             pdLoading.dismiss();
 
 
-            Toast.makeText(getApplicationContext(), "Success Adding data to SQLite!",
-                    Toast.LENGTH_LONG).show();
+
+            if (result.equalsIgnoreCase("exception") || result.equalsIgnoreCase("unsuccessful"))
+            {
+                Toast.makeText(MainActivity.this, "Invalid username or password", Toast.LENGTH_LONG).show();
+            }
+
+            //Toast.makeText(getApplicationContext(), "Success Adding data to SQLite!",
+             //       Toast.LENGTH_LONG).show();
+
+            Toast.makeText(getApplicationContext(), result, Toast.LENGTH_LONG).show();
+
         }
+
+
 
     }
 
